@@ -4,6 +4,68 @@ import utime
 import time
 import uasyncio
 
+##### FROM https://github.com/PinkInk/upylib/blob/master/bh1750/bh1750/__init__.py
+"""
+Micropython BH1750 ambient light sensor driver.
+"""
+
+
+
+class BH1750():
+    """Micropython BH1750 ambient light sensor driver."""
+
+    PWR_OFF = 0x00
+    PWR_ON = 0x01
+    RESET = 0x07
+
+    # modes
+    CONT_LOWRES = 0x13
+    CONT_HIRES_1 = 0x10
+    CONT_HIRES_2 = 0x11
+    ONCE_HIRES_1 = 0x20
+    ONCE_HIRES_2 = 0x21
+    ONCE_LOWRES = 0x23
+
+    # default addr=0x23 if addr pin floating or pulled to ground
+    # addr=0x5c if addr pin pulled high
+    def __init__(self, bus, addr=0x23):
+        self.bus = bus
+        self.addr = addr
+        self.off()
+        self.reset()
+
+    def off(self):
+        """Turn sensor off."""
+        self.set_mode(self.PWR_OFF)
+
+    def on(self):
+        """Turn sensor on."""
+        self.set_mode(self.PWR_ON)
+
+    def reset(self):
+        """Reset sensor, turn on first if required."""
+        self.on()
+        self.set_mode(self.RESET)
+
+    def set_mode(self, mode):
+        """Set sensor mode."""
+        self.mode = mode
+        self.bus.writeto(self.addr, bytes([self.mode]))
+
+    def luminance(self, mode):
+        """Sample luminance (in lux), using specified sensor mode."""
+        # continuous modes
+        if mode & 0x10 and mode != self.mode:
+            self.set_mode(mode)
+        # one shot modes
+        if mode & 0x20:
+            self.set_mode(mode)
+        # earlier measurements return previous reading
+        uasyncio.sleep_ms(24 if mode in (0x13, 0x23) else 180)
+        data = self.bus.readfrom(self.addr, 2)
+        factor = 2.0 if mode in (0x11, 0x21) else 1.0
+        return (data[0]<<8 | data[1]) / (1.2 * factor)
+##########################
 
 # Constants:
 fwd_map = {0: 1, 1: 2, 2: 0, 4: 6, 5: 4, 6: 5}
@@ -98,9 +160,17 @@ class SegmentDisplay:
     def tick(self, deltatime):
         for index, ((current_hue, current_sat, current_val), target_hsv) in enumerate(zip(self.current_color,self.target_color)):
 
+
             delta_hue = target_hsv[0] - current_hue
             delta_sat = target_hsv[1] - current_sat
-            delta_val = target_hsv[2] - current_val
+
+
+            recall_val =  target_hsv[2] * min(1,ambient_luminance/20)
+
+            if recall_val==0 and target_hsv[2]>0:
+                recall_val = 1
+
+            delta_val = recall_val - current_val
 
             self.current_color[index] = (
                 current_hue + clip(delta_hue, -self.hue_max_angular_velo_per_sec*deltatime, self.hue_max_angular_velo_per_sec*deltatime),
@@ -177,8 +247,17 @@ class Clock:
         now += self.time_zone_offset
         year, month, day, hour, minute, second, milisecond, microsecond = utime.localtime(now)
 
-        color=rgb_to_hsv(200, 100, 0)
-        colorB=rgb_to_hsv(50, 20, 5)
+        global ambient_luminance
+        # Set value based on exernal light:
+        # dim mode when <2
+
+        #if ambient_luminance<2:
+        #    color=rgb_to_hsv(2, 0, 0)
+        #    colorB=rgb_to_hsv(2, 0, 0)
+        #else:
+
+        color = rgb_to_hsv(250, 70, 5)
+        colorB = rgb_to_hsv(50, 20, 5)
 
         h = '%02d' % hour
         self.displays[0].write_char(int(h[0]), color)
@@ -188,9 +267,14 @@ class Clock:
         self.displays[3].write_char(int(m[0]), color)
         self.displays[4].write_char(int(m[1]), color)
 
-        s = '%02d' % second
-        self.displays[6].write_char(int(s[0]), colorB)
-        self.displays[7].write_char(int(s[1]), colorB)
+        if ambient_luminance>=2: # Disable seconds in darkness
+            s = '%02d' % second
+            self.displays[6].write_char(int(s[0]), colorB)
+            self.displays[7].write_char(int(s[1]), colorB)
+        else:
+            self.displays[6].write_char(' ', colorB)
+            self.displays[7].write_char(' ', colorB)
+
 
 
     def __getitem__(self,idx):
@@ -205,10 +289,29 @@ class Clock:
             time.sleep_us(200)
 
 
-np = neopixel.NeoPixel(machine.Pin(4), 7*8)
-c = Clock(4, np=np, time_zone_offset=2*3600)
+scl = machine.Pin(5)
+sda = machine.Pin(4)
+i2c = machine.I2C(-1, scl,sda)
+np = neopixel.NeoPixel(machine.Pin(14), 7*8) #GPIO14 corresponds to D5, SCLK
 
-async def tick():
+light_sensor = BH1750(i2c)
+c = Clock(4, np=np, time_zone_offset=2*3600)
+ambient_luminance = 20
+
+async def aquire_luminance():
+    while True:
+        global ambient_luminance
+
+        ambient_luminance_new = light_sensor.luminance(BH1750.ONCE_HIRES_2)
+        delta = ambient_luminance_new-ambient_luminance
+        # Update with slope to remove spikes
+        ambient_luminance += clip(delta, -0.3, 0.3)
+
+        # Measure in intevals of 100 ms
+        await uasyncio.sleep_ms(100)
+
+
+async def tick_clock():
     while  True:
         start = utime.ticks_ms()
         c.tick()
@@ -218,7 +321,9 @@ async def tick():
 
 def main():
     loop = uasyncio.get_event_loop()
-    loop.create_task(tick())
+    loop.create_task(aquire_luminance())
+    loop.create_task(tick_clock())
+
     loop.run_forever()
 
 main()
