@@ -5,26 +5,22 @@ import time
 import uasyncio
 
 
-CHAR_DICT = {0: 119,
- ' ': 0,
- 1: 36,
- 2: 93,
- 3: 109,
- 4: 46,
- 5: 107,
- 6: 123,
- 7: 37,
- 8: 127,
- 9: 111,
- 'A': 63,
- 'B': 127,
- 'C': 83}
+# Constants:
+fwd_map = {0: 1, 1: 2, 2: 0, 4: 6, 5: 4, 6: 5}
+rev_map = {0: 5, 1: 6, 2: 4, 4: 2, 5: 0, 6: 1}
+big_rev_map ={0: 5, 1: 6, 2: 4,  4: 2, 5: -7, 6: 1}
+small_fwd_map ={0: 1, 1: 0, 5: 6, 6: 5}
+
+CHAR_DICT = {0: 119, 1: 36, 2: 93, 3: 109, 4: 46,
+             5: 107, 6: 123, 7: 37, 8: 127, 9: 111,
+            ' ': 0, 'A': 63, 'B': 127, 'C': 83}
 
 def get_character_vect(char):
     return  [ (CHAR_DICT[char]  >> i) & 1 for i in range(7) ] #[::-1]
 
-def clamp(n, smallest, largest): return max(smallest, min(n, largest))
+def clip(n, smallest, largest): return max(smallest, min(n, largest))
 
+# Color conversions taken from colorsys library:
 def rgb_to_hsv(r, g, b):
     maxc = max(r, g, b)
     minc = min(r, g, b)
@@ -67,13 +63,6 @@ def hsv_to_rgb(h, s, v):
         return v, p, q
     # Cannot get here
 
-# 6666
-# 1  5
-# 1  5
-#  00
-# 2  4
-# 2  4
-#  33
 class SegmentDisplay:
 
     hue_max_angular_velo_per_sec = 100 # d. per second
@@ -114,12 +103,10 @@ class SegmentDisplay:
             delta_val = target_hsv[2] - current_val
 
             self.current_color[index] = (
-                current_hue + clamp(delta_hue, -self.hue_max_angular_velo_per_sec*deltatime, self.hue_max_angular_velo_per_sec*deltatime),
-                current_sat + clamp(delta_sat, -self.sat_max_velo_per_sec*deltatime, self.sat_max_velo_per_sec*deltatime),
-                current_val + clamp(delta_val, -self.val_max_velo_per_sec*deltatime, self.val_max_velo_per_sec*deltatime)
+                current_hue + clip(delta_hue, -self.hue_max_angular_velo_per_sec*deltatime, self.hue_max_angular_velo_per_sec*deltatime),
+                current_sat + clip(delta_sat, -self.sat_max_velo_per_sec*deltatime, self.sat_max_velo_per_sec*deltatime),
+                current_val + clip(delta_val, -self.val_max_velo_per_sec*deltatime, self.val_max_velo_per_sec*deltatime)
             )
-
-
 
     def write_to_strip(self,strip):
         for index, (h,s,v) in enumerate(self.current_color):
@@ -139,50 +126,28 @@ class SegmentDisplay:
                 self.set_hsv_target(i, (None, None,0))
                 #self.set_hsv_target(i, (None, None,0)) #
 
-
-    #def get_data_repr(self):
-#        return '\n'.join(
-#            ( '(%s %s %s) -> (%s %s %s)' % (*self.current_color[i], *self.target_color[i])
-             #for i in range(self.n_segments)
-            #))
-
-
-fwd_map = {0: 1, 1: 2, 2: 0, 3: 3, 4: 6, 5: 4, 6: 5} #{5:4, 6:5, 1:6, 0:3, 4:0, 3:1, 2:2}
-rev_map = {0: 5, 1: 6, 2: 4, 3: 3, 4: 2, 5: 0, 6: 1} #{5:0, 6:1, 1:2, 0:3, 4:4, 3:5, 2:6}
-
-big_rev_map ={0: 5, 1: 6, 2: 4, 3: 3, 4: 2, 5: 0-7, 6: 1} #{5:0, 6:1, 1:2, 0:3, 4:4, 3:5, 2:6}
-small_fwd_map ={0: 1, 1: 0, 2: 2, 3: 3, 4: 4, 5: 6, 6: 5} #{5:0, 6:1, 1:2, 0:3, 4:4, 3:5, 2:6}
-
-
-
-
 class Clock:
 
-    def __init__(self, pin, n_displays = 8, np=None, mode='time'):
+    def __init__(self, pin, np=None, mode='time', time_zone_offset=0):
 
+        self.time_zone_offset = time_zone_offset
         self.np = np
         self.mode=mode
-        self.n_displays = n_displays
         try:
             self.previous_tick = utime.ticks_us()
         except:
             pass
         # Initialise the displays
         self.displays = [
-
                 SegmentDisplay(49,index_remapping=rev_map), #0
                 SegmentDisplay(42,index_remapping=fwd_map), #1
                 SegmentDisplay(35,index_remapping=rev_map),#2
                 SegmentDisplay(28,index_remapping=fwd_map),#3
-
                 SegmentDisplay(21, index_remapping=big_rev_map),#4 #big
-                SegmentDisplay(7, index_remapping=fwd_map),#6 #big
-                SegmentDisplay(15, index_remapping=small_fwd_map),#5 #small
-                SegmentDisplay(0, index_remapping={0: 1, 1: 0, 2: 2, 3: 3, 4: 4, 5: 6, 6: 5}),#7 # small
-            #
-            #
-            #
-                        ]
+                SegmentDisplay(7, index_remapping=fwd_map),#5 #big
+                SegmentDisplay(15, index_remapping=small_fwd_map),#6 #small
+                SegmentDisplay(0, index_remapping={0: 1, 1: 0, 5: 6, 6: 5}),#7 # small
+                ]
 
     def test_index(self, idx, color=(0,0,250)):
         # Clear all values:
@@ -200,31 +165,19 @@ class Clock:
         if self.mode=='time':
             self.write_time()
 
-
-
         for segment in self.displays:
             segment.tick(delta_t)
             segment.write_to_strip(self.np)
         self.np.write()
-
-
         self.previous_tick = utime.ticks_us()
-
 
     def write_time(self, color=(20,80,2)):
 
-
         now = utime.mktime(time.localtime()) # Unix timestamp of current time
-        now += 2*3600 # Add timezone shift
+        now += self.time_zone_offset
         year, month, day, hour, minute, second, milisecond, microsecond = utime.localtime(now)
 
-
         color=rgb_to_hsv(200, 100, 0)
-        #else:
-        #    color=rgb_to_hsv(100, 100, 20)
-
-
-        #colorA=rgb_to_hsv(250, 150, 0)
         colorB=rgb_to_hsv(50, 20, 5)
 
         h = '%02d' % hour
@@ -252,36 +205,16 @@ class Clock:
             time.sleep_us(200)
 
 
-# Simple segment test:
-np = neopixel.NeoPixel(machine.Pin(4), 64) #7*n_displays)
-c = Clock(4, n_displays=7, np=np)
-
-
-
-if False:
-    c.displays[0].write_char(8, (10,1,1))
-    c.displays[0].tick(1)
-    c.displays[0].write_to_strip(c.np)
-    c.np.write()
-
-    c.displays[0].write_char(' ', (0,0,0))
-    c.displays[0].tick(1)
-    c.displays[0].write_to_strip(c.np)
-    c.np.write()
-
-
+np = neopixel.NeoPixel(machine.Pin(4), 7*8)
+c = Clock(4, np=np, time_zone_offset=2*3600)
 
 async def tick():
     while  True:
-
         start = utime.ticks_ms()
         c.tick()
         ticktime = utime.ticks_diff(utime.ticks_ms(), start)
-
         target_ticktime = 40 # miliseconds
-
         await uasyncio.sleep_ms( max(0,target_ticktime-ticktime)) #30 fps  1000 ms per
-
 
 def main():
     loop = uasyncio.get_event_loop()
