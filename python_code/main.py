@@ -302,12 +302,12 @@ async def aquire_luminance():
     while True:
         global ambient_luminance
 
-        ambient_luminance_new = light_sensor.luminance(BH1750.ONCE_HIRES_2)
+        ambient_luminance_new = light_sensor.luminance(BH1750.CONT_HIRES_2)
         delta = ambient_luminance_new-ambient_luminance
         # Update with slope to remove spikes
         ambient_luminance += clip(delta, -0.3, 0.3)
 
-        # Measure in intevals of 100 ms
+        # Measure light in intervals of 100 ms
         await uasyncio.sleep_ms(100)
 
 
