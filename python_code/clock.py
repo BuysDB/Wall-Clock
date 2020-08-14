@@ -3,6 +3,7 @@ import neopixel
 import utime
 import time
 import uasyncio
+from ntptime import settime
 
 ####
 
@@ -464,7 +465,7 @@ async def aquire_ic2_readings():
         ambient_luminance_new = light_sensor.luminance(BH1750.CONT_HIRES_2)
         delta = ambient_luminance_new-ambient_luminance
         # Update with slope to remove spikes
-        ambient_luminance += clip(delta, -0.3, 0.3)
+        ambient_luminance += clip(delta, -0.1, 0.1)
 
         # Measure light in intervals of 100 ms
         await uasyncio.sleep_ms(100)
@@ -483,8 +484,16 @@ async def tick_clock():
         target_ticktime = 40 # miliseconds
         await uasyncio.sleep_ms( max(0,target_ticktime-ticktime)) #30 fps  1000 ms per
 
+async def sync_time():
+    try:
+        settime()
+    except Exception:
+        return
+    await uasyncio.sleep(3600)
+
 def main():
     loop = uasyncio.get_event_loop()
+    loop.create_task(sync_time())
     loop.create_task(aquire_ic2_readings())
     loop.create_task(tick_clock())
     loop.run_forever()
