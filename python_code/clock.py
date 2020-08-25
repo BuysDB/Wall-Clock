@@ -485,11 +485,12 @@ async def tick_clock():
         await uasyncio.sleep_ms( max(0,target_ticktime-ticktime)) #30 fps  1000 ms per
 
 async def sync_time():
-    try:
-        settime()
-    except Exception:
-        return
-    await uasyncio.sleep(3600)
+    while True:
+        try:
+            settime()
+        except Exception:
+            return
+        await uasyncio.sleep(1500)
 
 def main():
     loop = uasyncio.get_event_loop()
