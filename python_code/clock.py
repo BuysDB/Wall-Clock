@@ -489,7 +489,7 @@ async def sync_time():
         try:
             settime()
         except Exception:
-            return
+            continue
         await uasyncio.sleep(1500) # The internal clock is terrible.
         # Update the time every this amount of seconds
 
