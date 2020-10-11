@@ -9,6 +9,7 @@
 - Adaptive brightness using BH1750 light sensor
 - ESP8266 microcontroller
 - 3d printed using PLA fillament without the need of support structures
+- 3d models are written in OpenSCAD
 - Segments interconnect using dovetail joints
 
 
