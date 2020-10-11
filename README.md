@@ -8,6 +8,8 @@
 - Temperature and humidity measurements using SHT31 sensor
 - Adaptive brightness using BH1750 light sensor
 - ESP8266 microcontroller
+- 3d printed using PLA fillament without the need of support structures
+- Segments interconnect using dovetail joints
 
 
 ### Software
