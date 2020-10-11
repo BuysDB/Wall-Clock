@@ -442,7 +442,7 @@ class Clock:
 
 ambient_luminance = 20
 ambient_temperature=20
-ambient_humidity=50
+ambient_humidity = 50
 
 scl = machine.Pin(5) #D1
 sda = machine.Pin(4) #D2
@@ -482,7 +482,7 @@ async def tick_clock():
         c.tick()
         ticktime = utime.ticks_diff(utime.ticks_ms(), start)
         target_ticktime = 40 # miliseconds
-        await uasyncio.sleep_ms( max(0,target_ticktime-ticktime)) #30 fps  1000 ms per
+        await uasyncio.sleep_ms( max(0,target_ticktime-ticktime))
 
 async def sync_time():
     while True:
@@ -490,11 +490,18 @@ async def sync_time():
             settime()
         except Exception:
             return
-        await uasyncio.sleep(1500)
+        await uasyncio.sleep(1500) # The internal clock is terrible.
+        # Update the time every this amount of seconds
 
 def main():
+    # Set up the event loop:
     loop = uasyncio.get_event_loop()
+
+    # Set up the task which synchronyzes the time to the internet time
     loop.create_task(sync_time())
+    # Read the external sensors
     loop.create_task(aquire_ic2_readings())
+    # Update the digits:
     loop.create_task(tick_clock())
+
     loop.run_forever()
