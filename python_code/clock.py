@@ -4,6 +4,7 @@ import utime
 import time
 import uasyncio
 from ntptime import settime
+import network
 
 ####
 
@@ -330,6 +331,7 @@ class Clock:
         self.time_zone_offset = time_zone_offset
         self.np = np
         self.mode=mode
+
         try:
             self.previous_tick = utime.ticks_us()
         except:
@@ -361,8 +363,12 @@ class Clock:
 
         # Decide what to show:
         year, month, day, hour, minute, second, milisecond, microsecond = utime.localtime()
-        if second>=0 and second<=30:
+
+
+        if second>=0 and second<=20:
             self.write_amb('temp')
+        elif second>=30 and second<=35:
+            self.write_amb('hum')
         else:
             self.write_time()
 
@@ -387,11 +393,24 @@ class Clock:
         if mode=='temp':
             d_str= '%.2f' % ambient_temperature
 
-        for i,c in enumerate(d_str):
-            self.displays[i].write_char(c, color)
 
-        self.displays[-3].write_char('*', colorB)
-        self.displays[-1].write_char('C', colorB)
+
+        if mode=='temp':
+            self.displays[-3].write_char('*', colorB)
+            self.displays[-1].write_char('C', colorB)
+
+            for i,c in enumerate(d_str):
+                self.displays[i].write_char(c, color)
+
+        elif mode=='hum':
+            d_str = '%02d' % ambient_humidity
+            for i,c in enumerate(d_str):
+                self.displays[i+1].write_char(c, color)
+
+            self.displays[4].write_char('H', color)
+            self.displays[5].write_char(0, color)
+            self.displays[6].write_char(2, color)
+
 
 
 
@@ -470,7 +489,7 @@ async def aquire_ic2_readings():
         # Measure light in intervals of 100 ms
         await uasyncio.sleep_ms(100)
 
-        if last_sht_aq is None or utime.time()-last_sht_aq > 120:
+        if last_sht_aq is None or utime.time()-last_sht_aq > 50:
             ambient_temperature, ambient_humidity  = sht.read_temperature_humidity()
             last_sht_aq = utime.time()
             #print(ambient_temperature, ambient_humidity)
@@ -494,6 +513,8 @@ async def sync_time():
         # Update the time every this amount of seconds
 
 def main():
+
+
     # Set up the event loop:
     loop = uasyncio.get_event_loop()
 
