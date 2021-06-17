@@ -459,7 +459,7 @@ class Clock:
             self.tick(mode=None)
             time.sleep_us(200)
 
-ambient_luminance = 20
+ambient_luminance = 0
 ambient_temperature=20
 ambient_humidity = 50
 
@@ -470,7 +470,11 @@ np = neopixel.NeoPixel(machine.Pin(14), 7*8) #GPIO14 corresponds to D5, SCLK
 sht = SHT31(i2c = i2c)
 light_sensor = BH1750(i2c)
 
-c = Clock(4, np=np, time_zone_offset=1*3600)
+
+# Summer time:
+#c = Clock(4, np=np, time_zone_offset=1*3600)
+# Winter time:
+c = Clock(4, np=np, time_zone_offset=2*3600)
 
 async def aquire_ic2_readings():
 
